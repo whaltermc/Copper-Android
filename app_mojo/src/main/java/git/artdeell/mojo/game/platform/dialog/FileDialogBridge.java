@@ -510,34 +510,35 @@ public class FileDialogBridge {
         }
     }
 
-    // Hand the game a scratch file and copy it back to the user-picked Uri once
-    // the game closes it. Returns null when the scratch file cannot be made.
+    // Hand the game a scratch path and copy it back to the user-picked Uri once
+    // the game finishes writing there. Only the name is reserved: desktop
+    // dialogs hand out paths that may not exist yet, and games may move their
+    // own output over the path (which fails if the file already exists).
+    // Returns null when no scratch location can be made.
     private static String prepareSaveFile(Activity host, Uri uri) {
         File dir = getDialogCacheDir(host);
         if (dir == null) return null;
         String displayName = sanitizeFileName(queryDisplayName(host, uri));
         if (displayName.equals("picked_file")) displayName = "saved_file";
         File target = uniqueFile(dir, "save_" + System.currentTimeMillis() + "_" + displayName);
-        try {
-            if (!target.createNewFile()) {
-                Log.e(TAG, "Save scratch file already exists " + target);
-                return null;
-            }
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to create save scratch file " + target, e);
-            return null;
-        }
-        watchSaveFile(host, target, uri);
+        Log.i(TAG, "Save dialog scratch path " + target + " for " + uri);
+        watchSaveFile(host, dir, target, uri);
         return target.getAbsolutePath();
     }
 
-    private static void watchSaveFile(Activity host, File target, Uri uri) {
+    // Watches the scratch directory (not the file itself, which does not exist
+    // yet) for the game closing or moving in the scratch file.
+    private static void watchSaveFile(Activity host, File dir, File target, Uri uri) {
         ContentResolver resolver = host.getContentResolver();
+        String wantedName = target.getName();
         final FileObserver[] observerRef = new FileObserver[1];
-        FileObserver observer = new FileObserver(target.getAbsolutePath(), FileObserver.CLOSE_WRITE) {
+        FileObserver observer = new FileObserver(dir.getAbsolutePath(),
+                FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO) {
             @Override
             public void onEvent(int event, @Nullable String path) {
-                if (event != FileObserver.CLOSE_WRITE) return;
+                if (path == null || !path.equals(wantedName)) return;
+                if (event != FileObserver.CLOSE_WRITE && event != FileObserver.MOVED_TO) return;
+                if (!target.isFile()) return;
                 boolean copied = false;
                 try (InputStream in = new FileInputStream(target);
                      OutputStream out = resolver.openOutputStream(uri, "wt")) {
@@ -547,6 +548,7 @@ public class FileDialogBridge {
                     }
                     copyStream(in, out);
                     copied = true;
+                    Log.i(TAG, "Save dialog wrote back " + target + " to " + uri);
                 } catch (Throwable t) {
                     Log.e(TAG, "Failed to write back save file to " + uri, t);
                 }
