@@ -125,6 +125,7 @@ if(EXISTS "${VKCOMPAT_SOURCE_DIR}/src/dispatch.cpp")
     add_library(vkcompat SHARED
             ${VKCOMPAT_SOURCE_DIR}/src/loader_android.cpp
             ${VKCOMPAT_SOURCE_DIR}/src/capabilities.cpp
+            ${VKCOMPAT_SOURCE_DIR}/src/features.cpp
             ${VKCOMPAT_SOURCE_DIR}/src/dispatch.cpp
             ${VKCOMPAT_SOURCE_DIR}/src/vkcompat.cpp
     )
