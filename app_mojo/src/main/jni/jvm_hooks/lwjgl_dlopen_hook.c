@@ -26,8 +26,19 @@ static jlong ndlopen_bugfix(__attribute__((unused)) JNIEnv *env,
                      jint jmode) {
     const char* filename = (const char*) filename_ptr;
 
-    // Oveeride vulkan loading to let us load vulkan ourselves
+    // Route Vulkan loading through the vkcompat wrapper when it is available.
+    // The wrapper loads the real system loader itself and negotiates
+    // capabilities; it is built as the `vkcompat` CMake target. If it is not
+    // present (or MOJO_NO_VKCOMPAT is set), fall back to the original path.
     if(strstr(filename, "libvulkan.so") == filename) {
+        if(getenv("MOJO_NO_VKCOMPAT") == NULL) {
+            void* vkcompat = dlopen("libvkcompat.so", RTLD_NOW | RTLD_LOCAL);
+            if(vkcompat != NULL) {
+                printf("LWJGL linkerhook: routing libvulkan.so through libvkcompat.so\n");
+                return (jlong) vkcompat;
+            }
+            printf("LWJGL linkerhook: libvkcompat.so unavailable, using custom driver\n");
+        }
         printf("LWJGL linkerhook: replacing load for libvulkan.so with custom driver\n");
         return (jlong) mojoexec_acq_vulkan_handle();
     }

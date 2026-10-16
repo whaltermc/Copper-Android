@@ -110,3 +110,33 @@ target_link_libraries(mobileglues_info_getter
         ${log-lib}
         dl
 )
+
+# ------ vkcompat (custom Vulkan compatibility wrapper) ------
+# The wrapper lives in a separate project. Point VKCOMPAT_SOURCE_DIR at it
+# (defaults to a sibling `VK` checkout). Built here as a SHARED library so the
+# NDK links it with the same STL/ABI as the rest of the launcher and Gradle
+# packages it into jniLibs. If the sources are absent the launcher still builds;
+# the LWJGL dlopen hook then falls back to the original Vulkan load path.
+
+set(VKCOMPAT_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../VK"
+    CACHE PATH "Path to the vkcompat project (contains src/ and include/)")
+
+if(EXISTS "${VKCOMPAT_SOURCE_DIR}/src/dispatch.cpp")
+    add_library(vkcompat SHARED
+            ${VKCOMPAT_SOURCE_DIR}/src/loader_android.cpp
+            ${VKCOMPAT_SOURCE_DIR}/src/capabilities.cpp
+            ${VKCOMPAT_SOURCE_DIR}/src/dispatch.cpp
+            ${VKCOMPAT_SOURCE_DIR}/src/vkcompat.cpp
+    )
+    target_include_directories(vkcompat PRIVATE
+            ${VKCOMPAT_SOURCE_DIR}/include)
+    target_compile_features(vkcompat PRIVATE cxx_std_17)
+    target_compile_options(vkcompat PRIVATE
+            -fvisibility=hidden
+            -fvisibility-inlines-hidden)
+    target_link_libraries(vkcompat PRIVATE dl)
+    message(STATUS "vkcompat: building wrapper from ${VKCOMPAT_SOURCE_DIR}")
+else()
+    message(STATUS "vkcompat: sources not found at ${VKCOMPAT_SOURCE_DIR}; "
+            "LWJGL libvulkan load will use the default path")
+endif()
