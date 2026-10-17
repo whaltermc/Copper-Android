@@ -211,5 +211,36 @@ public class GpuUtils {
         public boolean isArm() {
             return (renderer.contains("Mali") || renderer.contains("Immortalis")) && vendor.equals("ARM");
         }
+
+        /**
+         * Detect the Mali GPU architecture version from the renderer string.
+         * Mali GPU architectures map to Valhall versions:
+         *  - v9:  Mali-G52, G57, G77, G78
+         *  - v10: Mali-G310, G610
+         *  - v11: Mali-G615, G715
+         *  - v12: Mali-G620, G720
+         *  - v13: Mali-G725, G925
+         *
+         * @return architecture version (9-13) or 0 if unknown/not a Mali GPU
+         */
+        public int getMaliArchVersion() {
+            if(!isArm()) return 0;
+            String r = renderer.toLowerCase(java.util.Locale.ROOT);
+            int gIdx = r.indexOf("mali-g");
+            if(gIdx == -1) gIdx = r.indexOf("immortalis-g");
+            if(gIdx == -1) return 0;
+            gIdx += "mali-g".length();
+            int endIdx = gIdx;
+            while(endIdx < r.length() && Character.isDigit(r.charAt(endIdx))) endIdx++;
+            if(endIdx == gIdx) return 0;
+            int model = Integer.parseInt(r.substring(gIdx, endIdx));
+            if(model >= 725) return 13;
+            if(model >= 720) return 12;
+            if(model >= 615) return 11;
+            if(model >= 610) return 10;
+            if(model >= 310) return 10;
+            if(model >= 52) return 9;
+            return 0;
+        }
     }
 }

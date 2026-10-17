@@ -133,7 +133,9 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
         if(!PREF_VULKAN_DRIVER_SYSTEM.equals(PREF_VULKAN_DRIVER)) {
             GpuUtils.GLInfo glInfo = GpuUtils.getGlInfo();
             if(glInfo.isAdreno()) mGameRenderer.overrideVulkanDriver();
-            else if(glInfo.isArm()) mGameRenderer.overridePanvkDriver();
+            else if(glInfo.isArm()) mGameRenderer.overridePanvkDriver(this, () -> {
+                Log.i("GameActivity", "PanVK driver ready, continuing game startup");
+            });
         }
 
         AsyncAssetManager.extractDefaultSettings(this, instance.getGameDirectory());

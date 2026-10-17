@@ -21,8 +21,10 @@ import git.artdeell.mojo.game.renderer.impl.GLESRenderSpec;
 import git.artdeell.mojo.game.renderer.impl.MesaRenderSpec;
 import git.artdeell.mojo.game.renderer.impl.PluginRenderSpec;
 import git.artdeell.mojo.prefs.LauncherPreferences;
+import git.artdeell.mojo.utils.PanVkDriverManager;
 import git.artdeell.mojo.utils.plugins.PluginManager;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -176,11 +178,29 @@ public class GameRenderer {
 
     /**
      * Enable custom Vulkan driver (PanVK Kbase) usage.
+     * Automatically downloads the correct driver for the device's Mali GPU architecture.
      *
-     * PanVK Kbase is experimental on many Mali GPUs and refuses to load unless it is explicitly allowed.
+     * @param context application context
+     * @param onReady callback invoked when the driver path has been set (or immediately if already cached)
      */
-    public void overridePanvkDriver() {
+    public void overridePanvkDriver(Context context, Runnable onReady) {
         environment.put("PAN_I_WANT_A_BROKEN_VULKAN_DRIVER", "1");
-        MojoExec.setUsePanvk(true);
+        PanVkDriverManager manager = new PanVkDriverManager(context);
+        manager.getDriverForDevice(new PanVkDriverManager.DriverReadyListener() {
+            @Override
+            public void onDriverReady(File driverFile) {
+                MojoExec.setPanvkDriverPath(driverFile.getAbsolutePath());
+                MojoExec.setUsePanvk(true);
+                Logger.i(TAG, "PanVK driver set: " + driverFile.getAbsolutePath());
+                if(onReady != null) onReady.run();
+            }
+
+            @Override
+            public void onDriverError(String error) {
+                Log.w(TAG, "PanVK driver error: " + error + ", falling back to bundled driver");
+                MojoExec.setUsePanvk(true);
+                if(onReady != null) onReady.run();
+            }
+        });
     }
 }
