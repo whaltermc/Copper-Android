@@ -215,7 +215,7 @@ public class GpuUtils {
         /**
          * Detect the Mali GPU architecture version from the renderer string.
          * Mali GPU architectures map to Valhall versions:
-         *  - v9:  Mali-G52, G57, G77, G78
+         *  - v9:  Mali-G52, G57, G68, G77, G78
          *  - v10: Mali-G310, G610
          *  - v11: Mali-G615, G715
          *  - v12: Mali-G620, G720
@@ -234,12 +234,15 @@ public class GpuUtils {
             while(endIdx < r.length() && Character.isDigit(r.charAt(endIdx))) endIdx++;
             if(endIdx == gIdx) return 0;
             int model = Integer.parseInt(r.substring(gIdx, endIdx));
-            if(model >= 725) return 13;
+            if(model >= 925) return 13;
+            if(model == 725) return 13;
             if(model >= 720) return 12;
-            if(model >= 615) return 11;
-            if(model >= 610) return 10;
-            if(model >= 310) return 10;
-            if(model >= 52) return 9;
+            if(model == 715) return 11;
+            if(model == 615) return 11;
+            if(model == 610) return 10;
+            if(model == 310) return 10;
+            if(model == 52 || model == 57) return 9;
+            if(model >= 68 && model <= 78) return 9;
             return 0;
         }
     }
