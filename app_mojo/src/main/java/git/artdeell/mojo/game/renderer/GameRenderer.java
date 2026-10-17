@@ -52,6 +52,11 @@ public class GameRenderer {
     private RenderSpec currentRenderer;
     private Map<String, String> environment = new HashMap<>();
 
+    // Directory holding the downloaded PanVK driver for this device's Mali
+    // architecture. Prepended to the native library search path so the
+    // matching binary is found before the bundled one.
+    private static String sPanvkDriverDir = null;
+
     public GameRenderer(String currentRenderer) {
         this.currentRenderer = getKnownRenderer(currentRenderer);
         if(this.currentRenderer == null) this.currentRenderer = getKnownRenderer(GL4ES_RENDERER);
@@ -95,6 +100,7 @@ public class GameRenderer {
      */
     public static void setRendererLibraryPath(String mainPath, String additionalPath) {
         if (additionalPath != null) mainPath = additionalPath + ":" + mainPath;
+        if (sPanvkDriverDir != null) mainPath = sPanvkDriverDir + ":" + mainPath;
         MojoExec.setNativeLibraryDir(mainPath);
     }
 
@@ -178,29 +184,30 @@ public class GameRenderer {
 
     /**
      * Enable custom Vulkan driver (PanVK Kbase) usage.
-     * Automatically downloads the correct driver for the device's Mali GPU architecture.
+     * Logs the detected Mali GPU architecture and kicks off a background
+     * prefetch of the matching driver via PanVkDriverManager. Uses only the
+     * published loader API (fixed "libvulkan_panfrost.so" name).
      *
      * @param context application context
-     * @param onReady callback invoked when the driver path has been set (or immediately if already cached)
      */
-    public void overridePanvkDriver(Context context, Runnable onReady) {
+    public void overridePanvkDriver(Context context) {
         environment.put("PAN_I_WANT_A_BROKEN_VULKAN_DRIVER", "1");
-        PanVkDriverManager manager = new PanVkDriverManager(context);
-        manager.getDriverForDevice(new PanVkDriverManager.DriverReadyListener() {
-            @Override
-            public void onDriverReady(File driverFile) {
-                MojoExec.setPanvkDriverPath(driverFile.getAbsolutePath());
-                MojoExec.setUsePanvk(true);
-                Log.i(TAG, "PanVK driver set: " + driverFile.getAbsolutePath());
-                if(onReady != null) onReady.run();
+        try {
+            PanVkDriverManager manager = new PanVkDriverManager(context);
+            int arch = manager.detectMaliArchVersion();
+            if(arch > 0) {
+                File archDriver = manager.getArchDriverFile(arch);
+                if(archDriver.exists()) {
+                    sPanvkDriverDir = manager.getArchDriverDir(arch).getAbsolutePath();
+                    Log.i(TAG, "PanVK driver for Mali v" + arch + ": " + archDriver.getAbsolutePath());
+                }else {
+                    Log.i(TAG, "PanVK driver for Mali v" + arch + " not cached yet, using bundled one");
+                }
+                manager.prefetchDriverForDevice();
             }
-
-            @Override
-            public void onDriverError(String error) {
-                Log.w(TAG, "PanVK driver error: " + error + ", falling back to bundled driver");
-                MojoExec.setUsePanvk(true);
-                if(onReady != null) onReady.run();
-            }
-        });
+        }catch (Throwable t) {
+            Log.w(TAG, "PanVK driver selection failed, using bundled driver", t);
+        }
+        MojoExec.setUsePanvk(true);
     }
 }

@@ -95,7 +95,7 @@ public class PanVkDriverManager {
             return;
         }
 
-        File targetFile = new File(driversDir, "libvulkan_panfrost_v" + arch + ".so");
+        File targetFile = getArchDriverFile(arch);
         if(targetFile.exists()) {
             cachedDriverFile = targetFile;
             cachedArchVersion = arch;
@@ -114,6 +114,8 @@ public class PanVkDriverManager {
 
         new Thread(() -> {
             try {
+                File parent = targetFile.getParentFile();
+                if(parent != null && !parent.exists()) parent.mkdirs();
                 Log.i(TAG, "Downloading PanVK driver v" + arch + " from " + url);
                 HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
                 conn.setRequestMethod("GET");
@@ -150,6 +152,59 @@ public class PanVkDriverManager {
                 new Handler(Looper.getMainLooper()).post(() -> listener.onDriverError(e.getMessage()));
             }
         }).start();
+    }
+
+    /**
+     * Return the on-disk driver file for the given Mali architecture version.
+     * The driver is stored in a per-architecture directory but keeps the fixed
+     * "libvulkan_panfrost.so" name, because the native loader resolves that
+     * exact soname through the driver namespace search path.
+     */
+    public File getArchDriverFile(int arch) {
+        return new File(getArchDriverDir(arch), "libvulkan_panfrost.so");
+    }
+
+    /**
+     * Return the directory that holds the driver for the given Mali
+     * architecture version. This directory gets prepended to the native
+     * library search path, so the matching binary wins over the bundled one.
+     */
+    public File getArchDriverDir(int arch) {
+        return new File(driversDir, "v" + arch);
+    }
+
+    /**
+     * Return the on-disk driver file for the current device's Mali GPU, or null
+     * when the device is not a recognized Mali GPU.
+     */
+    public File getArchDriverFileForDevice() {
+        int arch = detectMaliArchVersion();
+        if(arch == 0) return null;
+        return getArchDriverFile(arch);
+    }
+
+    /**
+     * Start a background download of the PanVK driver for the current device
+     * when it is not cached yet. Failures are only logged.
+     */
+    public void prefetchDriverForDevice() {
+        int arch = detectMaliArchVersion();
+        if(arch == 0) return;
+        File targetFile = getArchDriverFile(arch);
+        if(targetFile.exists()) {
+            cachedDriverFile = targetFile;
+            cachedArchVersion = arch;
+            return;
+        }
+        String releaseTag = ARCH_TO_RELEASE_TAG.get(arch);
+        String assetName = ARCH_TO_DRIVER_ASSET.get(arch);
+        if(releaseTag == null || assetName == null) return;
+        downloadDriver(arch, releaseTag, assetName, targetFile, new DriverReadyListener() {
+            @Override public void onDriverReady(File driverFile) {}
+            @Override public void onDriverError(String error) {
+                Log.w(TAG, "PanVK prefetch failed: " + error);
+            }
+        });
     }
 
     public File getCachedDriver() {

@@ -214,9 +214,10 @@ public class GpuUtils {
 
         /**
          * Detect the Mali GPU architecture version from the renderer string.
-         * Mali GPU architectures map to Valhall versions:
-         *  - v9:  Mali-G52, G57, G68, G77, G78
-         *  - v10: Mali-G310, G610
+         * Only Valhall-generation GPUs are listed, since PanVK Kbase supports
+         * Mali v9-v13:
+         *  - v9:  Mali-G57, G68, G77, G78
+         *  - v10: Mali-G310, G610, G510, G710
          *  - v11: Mali-G615, G715
          *  - v12: Mali-G620, G720
          *  - v13: Mali-G725, G925
@@ -227,23 +228,25 @@ public class GpuUtils {
             if(!isArm()) return 0;
             String r = renderer.toLowerCase(java.util.Locale.ROOT);
             int gIdx = r.indexOf("mali-g");
-            if(gIdx == -1) gIdx = r.indexOf("immortalis-g");
+            int prefixLen = "mali-g".length();
+            if(gIdx == -1) {
+                gIdx = r.indexOf("immortalis-g");
+                prefixLen = "immortalis-g".length();
+            }
             if(gIdx == -1) return 0;
-            gIdx += "mali-g".length();
+            gIdx += prefixLen;
             int endIdx = gIdx;
             while(endIdx < r.length() && Character.isDigit(r.charAt(endIdx))) endIdx++;
             if(endIdx == gIdx) return 0;
             int model = Integer.parseInt(r.substring(gIdx, endIdx));
-            if(model >= 925) return 13;
-            if(model == 725) return 13;
-            if(model >= 720) return 12;
-            if(model == 715) return 11;
-            if(model == 615) return 11;
-            if(model == 610) return 10;
-            if(model == 310) return 10;
-            if(model == 52 || model == 57) return 9;
-            if(model >= 68 && model <= 78) return 9;
-            return 0;
+            switch(model) {
+                case 57: case 68: case 77: case 78: return 9;
+                case 310: case 510: case 610: case 710: return 10;
+                case 615: case 715: return 11;
+                case 620: case 720: return 12;
+                case 725: case 925: return 13;
+                default: return 0;
+            }
         }
     }
 }
