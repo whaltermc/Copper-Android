@@ -191,7 +191,7 @@ public class GameRenderer {
             public void onDriverReady(File driverFile) {
                 MojoExec.setPanvkDriverPath(driverFile.getAbsolutePath());
                 MojoExec.setUsePanvk(true);
-                Logger.i(TAG, "PanVK driver set: " + driverFile.getAbsolutePath());
+                Log.i(TAG, "PanVK driver set: " + driverFile.getAbsolutePath());
                 if(onReady != null) onReady.run();
             }
 
