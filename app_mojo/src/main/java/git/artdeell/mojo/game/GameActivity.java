@@ -8,7 +8,8 @@ import static git.artdeell.mojo.prefs.LauncherPreferences.PREF_ENABLE_GYRO;
 import static git.artdeell.mojo.prefs.LauncherPreferences.PREF_SUSTAINED_PERFORMANCE;
 import static git.artdeell.mojo.prefs.LauncherPreferences.PREF_USE_ALTERNATE_SURFACE;
 import static git.artdeell.mojo.prefs.LauncherPreferences.PREF_VIRTUAL_MOUSE_START;
-import static git.artdeell.mojo.prefs.LauncherPreferences.PREF_ZINK_PREFER_SYSTEM_DRIVER;
+import static git.artdeell.mojo.prefs.LauncherPreferences.PREF_VULKAN_DRIVER;
+import static git.artdeell.mojo.prefs.LauncherPreferences.PREF_VULKAN_DRIVER_SYSTEM;
 
 import android.app.Activity;
 import androidx.appcompat.app.AlertDialog;
@@ -68,6 +69,7 @@ import git.artdeell.mojo.instances.Instances;
 import git.artdeell.mojo.utils.lifecycle.ContextExecutor;
 import git.artdeell.mojo.game.platform.Platform;
 import git.artdeell.mojo.game.platform.backend.DummyBackend;
+import git.artdeell.mojo.game.platform.dialog.FileDialogBridge;
 import git.artdeell.mojo.prefs.LauncherPreferences;
 import git.artdeell.mojo.prefs.QuickSettingSideDialog;
 import git.artdeell.mojo.services.GameService;
@@ -128,8 +130,10 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
         }
         mGameRenderer = new GameRenderer(instance.getLaunchRenderer());
 
-        if(GpuUtils.getGlInfo().isAdreno() && !PREF_ZINK_PREFER_SYSTEM_DRIVER) {
-            mGameRenderer.overrideVulkanDriver();
+        if(!PREF_VULKAN_DRIVER_SYSTEM.equals(PREF_VULKAN_DRIVER)) {
+            GpuUtils.GLInfo glInfo = GpuUtils.getGlInfo();
+            if(glInfo.isAdreno()) mGameRenderer.overrideVulkanDriver();
+            else if(glInfo.isArm()) mGameRenderer.overridePanvkDriver();
         }
 
         AsyncAssetManager.extractDefaultSettings(this, instance.getGameDirectory());
@@ -366,6 +370,7 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
     protected void onDestroy() {
         super.onDestroy();
         ContextExecutor.clearActivity();
+        FileDialogBridge.cancelAll();
     }
 
     @Override
@@ -396,6 +401,8 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+
+        if(FileDialogBridge.handleActivityResult(requestCode, resultCode, data)) return;
 
         if (requestCode == 1 && resultCode == Activity.RESULT_OK) {
             // Reload PREF_DEFAULTCTRL_PATH

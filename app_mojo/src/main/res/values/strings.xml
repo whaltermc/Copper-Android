@@ -70,8 +70,10 @@
     <string name="mcl_setting_renderer_freedreno_kgsl">Freedreno (KGSL) - all versions</string>
     <string name="mcl_setting_renderer_mesa_desktop">Mesa (DRM) - all versions</string>
     <string name="mcl_setting_renderer_mesa_desktop_ext">Mesa (DRM, external) - all versions</string>
-    <string name="mcl_setting_renderer_mobileglues">MobileGlues (OpenGL ES) - 1.17+ only</string>
+    <string name="mcl_setting_renderer_mobileglues">MobileGlues (OpenGL ES) - (1.17+ only)</string>
     <string name="mcl_setting_renderer_sfpew">SFPEW/MobileGlues (OpenGL ES) - (all versions)</string>
+    <string name="mcl_setting_renderer_plugin">Renderer plugin</string>
+    <string name="mcl_setting_renderer_from_plugins">Plugin: %1$s</string>
     <string name="mcl_setting_veroption_release">Release</string>
     <string name="mcl_setting_veroption_snapshot">Snapshot</string>
     <string name="mcl_setting_veroption_oldalpha">Old-alpha</string>
@@ -258,6 +260,10 @@
     <string name="global_delete">Delete</string>
     <string name="pedit_java_runtime">Java Runtime</string>
     <string name="pedit_renderer">Renderer</string>
+    <string name="pedit_graphics_backend">Graphics backend</string>
+    <string name="graphics_backend_default">Default</string>
+    <string name="graphics_backend_vulkan">Prefer Vulkan</string>
+    <string name="graphics_backend_opengl">Prefer OpenGL</string>
     <string name="color_default_hex" translatable="false">FFFF0000</string>
     <string name="notif_channel_name">General</string>
     <string name="notif_channel_id" translatable="false">channel_id</string>
@@ -350,7 +356,15 @@
     <string name="hint_search_modpack">Search for modpacks</string>
 
     <string name="preference_vulkan_driver_system_title">Use system Vulkan driver</string>
-    <string name="preference_vulkan_driver_system_description">Force the launcher to use the system Vulkan driver instead of Turnip on Adreno GPUs. Only affects Zink and mods that use Vulkan.</string>
+    <string name="preference_vulkan_driver_system_description">Force the launcher to use the system Vulkan driver instead of Turnip on Adreno or PanVK Kbase on Mali GPUs. Only affects Zink and mods that use Vulkan.</string>
+    <string name="preference_vulkan_driver_title">Vulkan driver</string>
+    <string name="preference_vulkan_driver_system">System Vulkan driver</string>
+    <string name="preference_vulkan_driver_custom_adreno">Turnip (Adreno)</string>
+    <string name="preference_vulkan_driver_custom_mali">PanVK Kbase (Mali)</string>
+
+    <string name="preference_native_plugins_title">Native library plugins</string>
+    <string name="preference_native_plugins_summary">Choose which installed native library plugins are loaded when the game starts.</string>
+    <string name="preference_native_plugins_dialog_title">Native library plugins</string>
 
     <string name="generic_install">Install</string>
     <string name="generic_apply">Apply</string>
@@ -596,7 +610,7 @@
     <string name="mg_renderer_title_dsaExt">Advertise Experimental Direct State Access extension</string>
     <string name="mg_renderer_summary_dsaExt">May help with Iris shaderpacks, required for AcceleratedRendering mod</string>
     <string name="mg_renderer_title_fsr">AMD FSR 1 Upscaling</string>
-    <string name="mcl_setting_title_renderer_settings">Extra Renderer Settings</string>
+    <string name="mcl_setting_title_renderer_settings">MobileGlues Renderer Settings</string>
     <string name="mcl_setting_title_renderer_subtitle">Renderer specific settings</string>
 
     <!-- Mod manager / content browser -->
@@ -708,4 +722,45 @@
     <string name="skin_editor_session_expired">Your session expired. Log in to this account again.</string>
     <string name="angelica_found_sfpew_notice">Angelica mod found, Simple FPE Wrapper not needed</string>
     <string name="bta_configuring">Configuring BTA…</string>
+    <string name="pref_blocklist_disable_title">Disable server blocklist</string>
+    <string name="pref_blocklist_disable_description">Prevent the MC server blocklist from loading. This allows you to play on blocked servers (like 6b6t.org)</string>
+
+    <!-- Content detail screen (description / gallery / changelog + versions) -->
+    <string name="content_kind_mod">Mod</string>
+    <string name="content_kind_resourcepack">Resource pack</string>
+    <string name="content_kind_shaderpack">Shader pack</string>
+    <string name="content_kind_modpack">Modpack</string>
+    <string name="content_tab_description">Description</string>
+    <string name="content_tab_gallery">Gallery</string>
+    <string name="content_tab_changelog">Changelog</string>
+    <string name="content_tab_versions">Versions</string>
+    <string name="content_open_page">Open page</string>
+    <string name="content_description_error">Could not load the full description, showing the summary instead.</string>
+    <string name="content_description_empty">This project has no description.</string>
+    <string name="content_gallery_empty">No pictures in the gallery.</string>
+    <string name="content_changelog_empty">No changelog available.</string>
+    <string name="content_changelog_none">No changelog was provided for this version.</string>
+    <string name="content_changelog_error">Could not load the changelog.</string>
+    <string name="content_changelog_more">Show more</string>
+    <string name="content_changelog_retry">Retry</string>
+    <string name="content_versions_title">Versions</string>
+    <string name="content_versions_count">%d available</string>
+    <string name="content_versions_empty">No versions found. Try changing the filters.</string>
+    <string name="content_version_release">Release</string>
+    <string name="content_version_beta">Beta</string>
+    <string name="content_version_alpha">Alpha</string>
+    <string name="content_action_loading">…</string>
+    <string name="content_version_incompatible">Incompatible</string>
+    <string name="content_version_downloads">%s downloads</string>
+    <string name="content_session_lost">This screen was closed while the launcher was in the background.</string>
+
+    <!-- Filter dialog -->
+    <string name="filter_dialog_title">Filters</string>
+    <string name="filter_dialog_subtitle">Narrow down what you see</string>
+    <string name="filter_dialog_subtitle_manage">Used when checking installed content for updates</string>
+    <string name="filter_section_version">Minecraft version</string>
+    <string name="filter_any_version">Any version</string>
+    <string name="filter_change">Change</string>
+    <string name="filter_clear_version">Clear the version</string>
+    <string name="filter_reset">Reset</string>
 </resources>

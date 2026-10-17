@@ -68,7 +68,9 @@ public class LauncherPreferences {
     public static boolean PREF_DUMP_SHADERS = false;
     public static float PREF_DEADZONE_SCALE = 1f;
     public static boolean PREF_BIG_CORE_AFFINITY = false;
-    public static boolean PREF_ZINK_PREFER_SYSTEM_DRIVER = false;
+    public static final String PREF_VULKAN_DRIVER_SYSTEM = "system";
+    public static final String PREF_VULKAN_DRIVER_CUSTOM = "custom";
+    public static String PREF_VULKAN_DRIVER = PREF_VULKAN_DRIVER_CUSTOM;
     public static boolean PREF_VERIFY_MANIFEST = true;
     public static String PREF_DOWNLOAD_SOURCE = "default";
     public static boolean PREF_SKIP_NOTIFICATION_PERMISSION_CHECK = false;
@@ -82,6 +84,7 @@ public class LauncherPreferences {
     public static boolean PREF_SHOW_MEMORY_WARNING_DIALOG = true;
     public static short PREF_BUTTON_TRANSPARENCY = 100;
     public static boolean PREF_UBWC_WORKAROUND = false;
+    public static boolean PREF_DISABLE_BLOCKLIST = false;
 
     /** Experimental: when true, CurseForge is left out of content searches and Modrinth is used alone,
      *  since its API can be noticeably slower than Modrinth's. */
@@ -126,7 +129,13 @@ public class LauncherPreferences {
         PREF_DUMP_SHADERS = DEFAULT_PREF.getBoolean("dump_shaders", false);
         PREF_DEADZONE_SCALE = ((float) DEFAULT_PREF.getInt("gamepad_deadzone_scale", 100))/100f;
         PREF_BIG_CORE_AFFINITY = DEFAULT_PREF.getBoolean("bigCoreAffinity", false);
-        PREF_ZINK_PREFER_SYSTEM_DRIVER = DEFAULT_PREF.getBoolean("zinkPreferSystemDriver", false);
+        // Bring the old "use system Vulkan driver" switch over to the driver list
+        if (!DEFAULT_PREF.contains("vulkanDriver") && DEFAULT_PREF.contains("zinkPreferSystemDriver")) {
+            DEFAULT_PREF.edit().putString("vulkanDriver",
+                    DEFAULT_PREF.getBoolean("zinkPreferSystemDriver", false)
+                            ? PREF_VULKAN_DRIVER_SYSTEM : PREF_VULKAN_DRIVER_CUSTOM).apply();
+        }
+        PREF_VULKAN_DRIVER = DEFAULT_PREF.getString("vulkanDriver", PREF_VULKAN_DRIVER_CUSTOM);
         PREF_DOWNLOAD_SOURCE = DEFAULT_PREF.getString("downloadSource", "default");
         PREF_VERIFY_MANIFEST = DEFAULT_PREF.getBoolean("verifyManifest", true);
         PREF_SKIP_NOTIFICATION_PERMISSION_CHECK = DEFAULT_PREF.getBoolean(PREF_KEY_SKIP_NOTIFICATION_CHECK, false);
@@ -139,6 +148,7 @@ public class LauncherPreferences {
         PREF_SHOW_MEMORY_WARNING_DIALOG = DEFAULT_PREF.getBoolean("showMemoryWarning", true);
         PREF_BUTTON_TRANSPARENCY = (short) DEFAULT_PREF.getInt("buttonTransparency", 100);
         PREF_UBWC_WORKAROUND = DEFAULT_PREF.getBoolean("ubwcWorkaround", false);
+        PREF_DISABLE_BLOCKLIST = DEFAULT_PREF.getBoolean("disableServerBlocklist", true);
 
         String argLwjglLibname = "-Dorg.lwjgl.opengl.libname=";
         for (String arg : JREUtils.parseJavaArguments(PREF_CUSTOM_JAVA_ARGS)) {
@@ -238,32 +248,6 @@ public class LauncherPreferences {
             Log.i("NOTCH DETECTION", "No notch detected, or the device if in split screen mode");
             return false;
         }
-    }
-
-    /** Write the current MG-ES (MobileGlues) renderer settings to its config.json */
-    public static void writeMGRendererSettings() throws IOException {
-        LinkedHashMap<String, Object> MGConfigJson = new LinkedHashMap<>();
-        MGConfigJson.put("enableANGLE", Integer.parseInt(DEFAULT_PREF.getString("mg_renderer_setting_angle", "0")));
-        MGConfigJson.put("enableNoError", Integer.parseInt(DEFAULT_PREF.getString("mg_renderer_setting_errorSetting", "0")));
-        MGConfigJson.put("fsr1Setting", Integer.parseInt(DEFAULT_PREF.getString("mg_renderer_setting_fsr", "0")));
-
-        int computeShaderext = DEFAULT_PREF.getBoolean("mg_renderer_computeShaderext", false) ? 1 : 0;
-        int angleDepthClearFixMode = DEFAULT_PREF.getBoolean("mg_renderer_setting_angleDepthClearFixMode", false) ? 1 : 0;
-        int timerQueryExt = DEFAULT_PREF.getBoolean("mg_renderer_setting_timerQueryExt", false) ? 1 : 0;
-        int dsaExt = DEFAULT_PREF.getBoolean("mg_renderer_dsaExt", false) ? 1 : 0;
-        MGConfigJson.put("enableExtComputeShader", computeShaderext);
-        MGConfigJson.put("angleDepthClearFixMode", angleDepthClearFixMode);
-        MGConfigJson.put("enableExtTimerQuery", timerQueryExt);
-        MGConfigJson.put("enableExtDirectStateAccess", dsaExt);
-        if (DEFAULT_PREF.getBoolean("mg_renderer_multidrawCompute", false)) {
-            MGConfigJson.put("multidrawMode", 5);
-        } else MGConfigJson.put("multidrawMode", Integer.parseInt(DEFAULT_PREF.getString("mg_renderer_setting_multidraw", "0")));
-        MGConfigJson.put("maxGlslCacheSize", Integer.parseInt(DEFAULT_PREF.getString("mg_renderer_setting_glsl_cache_size", "128")));
-
-        File configFile = new File(Tools.DIR_DATA + "/MobileGlues", "config.json");
-        FileUtils.ensureParentDirectory(configFile);
-        Tools.write(configFile.getAbsolutePath(), Tools.GLOBAL_GSON.toJson(MGConfigJson));
-        Logger.appendToLog("Writing MG-ES config to " + configFile.getAbsolutePath());
     }
 
     /**

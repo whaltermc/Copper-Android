@@ -3,6 +3,8 @@ package git.artdeell.mojo;
 import git.artdeell.mojo.fragments.MainMenuFragment;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import git.artdeell.mojo.utils.ThemeColors;
+import git.artdeell.mojo.utils.plugins.NativePlugin;
+import git.artdeell.mojo.utils.plugins.PluginManager;
 import static android.os.Build.VERSION.SDK_INT;
 import static git.artdeell.mojo.MojoApplication.sExecutorService;
 
@@ -561,6 +563,10 @@ public final class Tools {
         Logger.appendToLog("Info: RAM allocated: " + LauncherPreferences.PREF_RAM_ALLOCATION + " Mb");
         Logger.appendToLog("Info: Graphics device: "+info.vendor+ " "+info.renderer+" (OpenGL ES "+info.glesMajorVersion+")");
         Logger.appendToLog("Info: Selected renderer: " + renderer.tag() + " (" + renderer.name() + ")");
+        for (NativePlugin plugin : PluginManager.getNativePlugins(ctx)) {
+            Logger.appendToLog("Info: Native plugin: " + plugin.packageName
+                    + (PluginManager.isNativePluginEnabled(ctx, plugin.packageName) ? " [enabled]" : " [disabled]"));
+        }
     }
 
     public static JVersionList.Version getVersionInfo(String versionName) {
@@ -740,7 +746,7 @@ public final class Tools {
 
     /** @return the two-pane main menu if it is the current screen of the activity, null otherwise */
     @Nullable
-    private static MainMenuFragment getTwoPaneMainMenu(FragmentActivity fragmentActivity) {
+    public static MainMenuFragment getTwoPaneMainMenu(FragmentActivity fragmentActivity) {
         Fragment current = fragmentActivity.getSupportFragmentManager().findFragmentById(R.id.container_fragment);
         if(current instanceof MainMenuFragment && ((MainMenuFragment) current).isTwoPane()) {
             return (MainMenuFragment) current;

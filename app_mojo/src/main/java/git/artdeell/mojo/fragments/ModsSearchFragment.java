@@ -145,6 +145,10 @@ public class ModsSearchFragment extends Fragment implements ModItemAdapter.Searc
 
         mFilterButton.setOnClickListener(v -> displayFilterDialog());
 
+        // Tapping a result opens its detail screens instead of expanding the card
+        mModItemAdapter.setOnContentClickListener(item ->
+                ContentDetailFragment.open(requireActivity(), item, mModpackApi, mSearchFilters.contentType));
+
         // Apply any pre-seeded filters passed in from the Manage Content picker
         applyPresetArgs();
 
@@ -231,128 +235,53 @@ public class ModsSearchFragment extends Fragment implements ModItemAdapter.Searc
      *  can trigger the same dialog as this fragment's own (now hidden in landscape)
      *  search_mod_filter button. */
     public void displayFilterDialog() {
-        AlertDialog dialog = new MaterialAlertDialogBuilder(requireContext())
-                .setView(R.layout.dialog_mod_filters)
-                .create();
+        boolean showLoaderFilter = supportsLoaderFilter();
 
-        dialog.setOnShowListener(dialogInterface -> {
-            TextView mSelectedVersion = dialog.findViewById(R.id.search_mod_selected_mc_version_textview);
-            Button mSelectVersionButton = dialog.findViewById(R.id.search_mod_mc_version_button);
-            Button mApplyButton = dialog.findViewById(R.id.search_mod_apply_filters);
-            android.widget.Spinner mLoaderSpinner = dialog.findViewById(R.id.search_mod_loader_spinner);
-            android.widget.Spinner mEngineSpinner = dialog.findViewById(R.id.search_mod_engine_spinner);
+        SearchFilterDialog.Options options = new SearchFilterDialog.Options();
+        options.showLoader = showLoaderFilter;
+        options.engine = mSearchFilters.engine;
+        options.mcVersion = mSearchFilters.mcVersion != null ? mSearchFilters.mcVersion : "";
+        options.loader = mSearchFilters.modLoader != null ? mSearchFilters.modLoader : "";
 
-            assert mSelectedVersion != null;
-            assert mSelectVersionButton != null;
-            assert mApplyButton != null;
-
-            // Set up the "Modrinth / CurseForge / Both" engine picker. If CurseForge is
-            // disabled in experimental settings, only Modrinth is offered and the filter
-            // is pinned to it, since a CurseForge-only or Both search would otherwise
-            // silently return nothing.
-            boolean curseforgeDisabled = git.artdeell.mojo.prefs.LauncherPreferences.DEFAULT_PREF
-                    .getBoolean("disableCurseforgeApi", false);
-            final int[] engineValues = curseforgeDisabled
-                    ? new int[]{Constants.ENGINE_MODRINTH}
-                    : new int[]{Constants.ENGINE_MODRINTH, Constants.ENGINE_CURSEFORGE, Constants.ENGINE_BOTH};
-            if (mEngineSpinner != null) {
-                String[] engineLabels = curseforgeDisabled
-                        ? new String[]{getString(R.string.search_mod_engine_modrinth)}
-                        : new String[]{getString(R.string.search_mod_engine_modrinth),
-                                        getString(R.string.search_mod_engine_curseforge),
-                                        getString(R.string.search_mod_engine_both)};
-                android.widget.ArrayAdapter<String> engineAdapter = new android.widget.ArrayAdapter<>(
-                        requireContext(), R.layout.spinner_item_m3, engineLabels);
-                engineAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item_m3);
-                mEngineSpinner.setAdapter(engineAdapter);
-
-                if (curseforgeDisabled) {
-                    mSearchFilters.engine = Constants.ENGINE_MODRINTH;
-                    mEngineSpinner.setSelection(0);
-                    mEngineSpinner.setEnabled(false);
-                } else {
-                    mEngineSpinner.setEnabled(true);
-                    for (int i = 0; i < engineValues.length; i++) {
-                        if (engineValues[i] == mSearchFilters.engine) {
-                            mEngineSpinner.setSelection(i);
-                            break;
-                        }
-                    }
-                }
+        // Nothing picked yet: start from the version/loader the current instance runs
+        if (options.mcVersion.isEmpty() && options.loader.isEmpty()) {
+            String profileKey = Instances.getSelectedInstanceKey();
+            if (!profileKey.isEmpty()) {
+                InstanceVersionResolver.Info info = InstanceVersionResolver.resolve(profileKey);
+                if (info.mcVersion != null) options.mcVersion = info.mcVersion;
+                if (showLoaderFilter && !info.loader.isEmpty()) options.loader = info.loader;
             }
+        }
 
-            // Set up loader spinner — only meaningful for mods. Resource packs and
-            // shader packs aren't loader-specific, so this whole row is hidden and
-            // any previously-set loader filter is simply not applied to the search.
-            TextView mLoaderLabel = dialog.findViewById(R.id.search_mod_loader_textview);
-            final String[] loaderValues = {"", "fabric", "forge", "quilt", "neoforge"};
-            boolean showLoaderFilter = mSearchFilters.contentType == ContentType.MOD;
-            if (mLoaderLabel != null) mLoaderLabel.setVisibility(showLoaderFilter ? View.VISIBLE : View.GONE);
-            if (mLoaderSpinner != null) {
-                mLoaderSpinner.setVisibility(showLoaderFilter ? View.VISIBLE : View.GONE);
-                String[] loaderLabels = {getString(R.string.search_mod_any_loader), "Fabric", "Forge", "Quilt", "NeoForge"};
-                android.widget.ArrayAdapter<String> loaderAdapter = new android.widget.ArrayAdapter<>(
-                        requireContext(), R.layout.spinner_item_m3, loaderLabels);
-                loaderAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item_m3);
-                mLoaderSpinner.setAdapter(loaderAdapter);
+        SearchFilterDialog.show(requireContext(), options,
+                (engine, version, loader) -> applyFilters(engine, version, loader));
+    }
 
-                // Restore current selection
-                String currentLoader = mSearchFilters.modLoader != null ? mSearchFilters.modLoader : "";
-                for (int i = 0; i < loaderValues.length; i++) {
-                    if (loaderValues[i].equals(currentLoader)) {
-                        mLoaderSpinner.setSelection(i);
-                        break;
-                    }
-                }
-            }
+    // ── Filter access, used by the inline filter cards of ContentPickerFragment ──
 
-            mSelectVersionButton.setOnClickListener(v ->
-                    VersionSelectorDialog.open(v.getContext(), true,
-                            (id, snapshot) -> mSelectedVersion.setText(id)));
+    public int getEngine() { return mSearchFilters.engine; }
 
-            // If nothing's been picked yet (no preset args, filter never touched
-            // before), default to the current instance's own version/loader
-            // instead of leaving the filter blank.
-            if ((mSearchFilters.mcVersion == null || mSearchFilters.mcVersion.isEmpty())
-                    && (mSearchFilters.modLoader == null || mSearchFilters.modLoader.isEmpty())) {
-                String profileKey = Instances.getSelectedInstanceKey();
-                if (!profileKey.isEmpty()) {
-                    InstanceVersionResolver.Info info = InstanceVersionResolver.resolve(profileKey);
-                    if (info.mcVersion != null) mSearchFilters.mcVersion = info.mcVersion;
-                    if (showLoaderFilter && !info.loader.isEmpty()) mSearchFilters.modLoader = info.loader;
-                    if (mLoaderSpinner != null) {
-                        for (int i = 0; i < loaderValues.length; i++) {
-                            if (loaderValues[i].equals(mSearchFilters.modLoader)) {
-                                mLoaderSpinner.setSelection(i);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            mSelectedVersion.setText(mSearchFilters.mcVersion);
+    @NonNull
+    public String getMcVersion() { return mSearchFilters.mcVersion != null ? mSearchFilters.mcVersion : ""; }
 
-            mApplyButton.setOnClickListener(v -> {
-                if (mEngineSpinner != null) {
-                    mSearchFilters.engine = engineValues[mEngineSpinner.getSelectedItemPosition()];
-                }
-                if (showLoaderFilter && mLoaderSpinner != null) {
-                    mSearchFilters.modLoader = loaderValues[mLoaderSpinner.getSelectedItemPosition()];
-                } else {
-                    mSearchFilters.modLoader = "";
-                }
-                mSearchFilters.mcVersion = mSelectedVersion.getText().toString();
-                searchMods(mSearchEditText.getText().toString());
-                dialogInterface.dismiss();
-            });
-        });
+    @NonNull
+    public String getModLoader() { return mSearchFilters.modLoader != null ? mSearchFilters.modLoader : ""; }
 
-        dialog.show();
+    /** Resource packs and shader packs aren't loader specific */
+    public boolean supportsLoaderFilter() { return mSearchFilters.contentType == ContentType.MOD; }
+
+    /** Sets the filters and searches again */
+    public void applyFilters(int engine, @NonNull String mcVersion, @NonNull String loader) {
+        mSearchFilters.engine = engine;
+        mSearchFilters.mcVersion = mcVersion;
+        mSearchFilters.modLoader = supportsLoaderFilter() ? loader : "";
+        if (mSearchEditText != null) searchMods(mSearchEditText.getText().toString());
     }
 
     // ── ModsInstallApi ────────────────────────────────────────────────────────
 
-    private static class ModsInstallApi extends CommonApi {
+    static class ModsInstallApi extends CommonApi implements git.artdeell.mojo.modding.modpacks.api.InstalledStateResolver,
+            git.artdeell.mojo.modding.modpacks.api.UnfilteredVersionsProvider {
 
         private final SearchFilters mFilters;
         private final ModrinthApi mModrinthApi = new ModrinthApi();
@@ -379,19 +308,24 @@ public class ModsSearchFragment extends Fragment implements ModItemAdapter.Searc
          */
         @Override
         public ModDetail getModDetails(ModItem item) {
+            return loadDetails(item, true);
+        }
+
+        @Override
+        public ModDetail getAllVersions(ModItem item) {
+            return loadDetails(item, false);
+        }
+
+        private ModDetail loadDetails(ModItem item, boolean applyFilters) {
             ModDetail detail;
+            String filterVer = applyFilters && mFilters.mcVersion != null && !mFilters.mcVersion.isEmpty()
+                    ? mFilters.mcVersion : null;
+            String filterLoader = applyFilters && mFilters.modLoader != null && !mFilters.modLoader.isEmpty()
+                    ? mFilters.modLoader : null;
             if (item.apiSource == git.artdeell.mojo.modding.modpacks.models.Constants.SOURCE_MODRINTH) {
-                String filterVer = (mFilters.mcVersion != null && !mFilters.mcVersion.isEmpty())
-                        ? mFilters.mcVersion : null;
-                String filterLoader = (mFilters.modLoader != null && !mFilters.modLoader.isEmpty())
-                        ? mFilters.modLoader : null;
                 detail = mModrinthApi.getModDetails(item, filterVer, filterLoader);
             } else if (item.apiSource == git.artdeell.mojo.modding.modpacks.models.Constants.SOURCE_CURSEFORGE) {
                 if (mCurseforgeApi == null) return null; // disabled in experimental settings
-                String filterVer = (mFilters.mcVersion != null && !mFilters.mcVersion.isEmpty())
-                        ? mFilters.mcVersion : null;
-                String filterLoader = (mFilters.modLoader != null && !mFilters.modLoader.isEmpty())
-                        ? mFilters.modLoader : null;
                 detail = mCurseforgeApi.getModDetails(item, filterVer, filterLoader);
             } else {
                 detail = super.getModDetails(item);
@@ -401,6 +335,11 @@ public class ModsSearchFragment extends Fragment implements ModItemAdapter.Searc
                 resolveInstalledVersionIndex(detail);
             }
             return detail;
+        }
+
+        @Override
+        public void resolveInstalledState(ModDetail detail) {
+            if (detail != null && !detail.isModpack) resolveInstalledVersionIndex(detail);
         }
 
         /**
@@ -439,7 +378,21 @@ public class ModsSearchFragment extends Fragment implements ModItemAdapter.Searc
             }
         }
 
+        /* Hashing every jar for every version lookup was the slowest part of opening a mod. A jar's
+         * hash only changes when the file does, so it is remembered by path, size and timestamp. */
+        private static final java.util.concurrent.ConcurrentHashMap<String, String> sHashCache =
+                new java.util.concurrent.ConcurrentHashMap<>();
+
         private static String sha1Hex(File file) {
+            String key = file.getAbsolutePath() + "|" + file.length() + "|" + file.lastModified();
+            String cached = sHashCache.get(key);
+            if (cached != null) return cached;
+            String hash = computeSha1Hex(file);
+            if (hash != null) sHashCache.put(key, hash);
+            return hash;
+        }
+
+        private static String computeSha1Hex(File file) {
             try {
                 java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-1");
                 byte[] buffer = new byte[8192];

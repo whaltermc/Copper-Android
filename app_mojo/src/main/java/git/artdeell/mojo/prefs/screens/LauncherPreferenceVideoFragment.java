@@ -1,22 +1,28 @@
 package git.artdeell.mojo.prefs.screens;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import androidx.preference.ListPreference;
-import androidx.preference.Preference;
+import androidx.preference.MultiSelectListPreference;
 import androidx.preference.SwitchPreferenceCompat;
 
 import git.artdeell.mojo.R;
 
+import git.artdeell.mojo.mobileglues.MainActivity;
 import git.artdeell.mojo.game.renderer.RendererCache;
 import git.artdeell.mojo.game.renderer.def.Renderers;
 import git.artdeell.mojo.game.renderer.extra.GLESProvider;
 import git.artdeell.mojo.prefs.CustomSeekBarPreference;
 import git.artdeell.mojo.prefs.LauncherPreferences;
 import git.artdeell.mojo.utils.GpuUtils;
+import git.artdeell.mojo.utils.plugins.NativePlugin;
+import git.artdeell.mojo.utils.plugins.PluginManager;
+
+import java.util.List;
 
 /**
  * Fragment for any settings video related
@@ -48,10 +54,23 @@ public class LauncherPreferenceVideoFragment extends LauncherPreferenceFragment 
         requirePreference("alternate_surface", SwitchPreferenceCompat.class).setChecked(LauncherPreferences.PREF_USE_ALTERNATE_SURFACE);
         requirePreference("force_vsync", SwitchPreferenceCompat.class).setChecked(LauncherPreferences.PREF_FORCE_VSYNC);
 
-        Preference driverPreference = requirePreference("zinkPreferSystemDriver");
+        ListPreference driverPreference = requirePreference("vulkanDriver", ListPreference.class);
         PackageManager packageManager = driverPreference.getContext().getPackageManager();
-        boolean supportsTurnip = GpuUtils.checkVulkanSupport(packageManager) && GpuUtils.getGlInfo().isAdreno();
-        driverPreference.setVisible(supportsTurnip);
+        GpuUtils.GLInfo glInfo = GpuUtils.getGlInfo();
+        boolean supportsCustomDriver = GpuUtils.checkVulkanSupport(packageManager) && (glInfo.isAdreno() || glInfo.isArm());
+        driverPreference.setVisible(supportsCustomDriver);
+        if (glInfo.isAdreno()) {
+            driverPreference.setEntries(new CharSequence[]{
+                    getString(R.string.preference_vulkan_driver_system),
+                    getString(R.string.preference_vulkan_driver_custom_adreno)});
+        } else {
+            driverPreference.setEntries(new CharSequence[]{
+                    getString(R.string.preference_vulkan_driver_system),
+                    getString(R.string.preference_vulkan_driver_custom_mali)});
+        }
+        driverPreference.setEntryValues(new CharSequence[]{
+                LauncherPreferences.PREF_VULKAN_DRIVER_SYSTEM,
+                LauncherPreferences.PREF_VULKAN_DRIVER_CUSTOM});
 
         // Show the bundled ANGLE switch only if the bundled ANGLE libraries are actually present
         if(hasAngle == null) {
@@ -81,7 +100,38 @@ public class LauncherPreferenceVideoFragment extends LauncherPreferenceFragment 
         rendererListPreference.setEntries(list.rendererDisplayNames);
         rendererListPreference.setEntryValues(list.rendererIds.toArray(new String[0]));
 
+        requirePreference("renderer_settings").setOnPreferenceClickListener(preference -> {
+            startActivity(new Intent(getContext(), MainActivity.class));
+            return true;
+        });
+
+        setupNativePluginPreference();
+
         computeVisibility();
+    }
+
+    private void setupNativePluginPreference() {
+        MultiSelectListPreference pluginsPreference = requirePreference(
+                PluginManager.PREF_ENABLED_NATIVE_PLUGINS, MultiSelectListPreference.class);
+        PluginManager.refresh(requireContext());
+        List<NativePlugin> plugins = PluginManager.getNativePlugins(requireContext());
+        if (plugins.isEmpty()) {
+            pluginsPreference.setVisible(false);
+            return;
+        }
+        CharSequence[] entries = new CharSequence[plugins.size()];
+        CharSequence[] entryValues = new CharSequence[plugins.size()];
+        for (int i = 0; i < plugins.size(); i++) {
+            NativePlugin plugin = plugins.get(i);
+            entries[i] = plugin.displayName;
+            entryValues[i] = plugin.packageName;
+        }
+        pluginsPreference.setEntries(entries);
+        pluginsPreference.setEntryValues(entryValues);
+        // Every installed plugin is enabled by default
+        if (!pluginsPreference.getSharedPreferences().contains(PluginManager.PREF_ENABLED_NATIVE_PLUGINS)) {
+            pluginsPreference.setValues(PluginManager.getAllNativePluginPackageNames(requireContext()));
+        }
     }
 
     @Override

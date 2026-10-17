@@ -19,8 +19,9 @@ import git.artdeell.mojo.Logger;
 import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.game.renderer.impl.GLESRenderSpec;
 import git.artdeell.mojo.game.renderer.impl.MesaRenderSpec;
-import git.artdeell.mojo.game.renderer.impl.MobileGluesRenderSpec;
+import git.artdeell.mojo.game.renderer.impl.PluginRenderSpec;
 import git.artdeell.mojo.prefs.LauncherPreferences;
+import git.artdeell.mojo.utils.plugins.PluginManager;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -73,9 +74,12 @@ public class GameRenderer {
             case MESA_RENDERER: return new MesaRenderSpec();
             case MESA_RENDERER_EXT: return new MesaRenderSpec.ExtMesaRenderSpec();
             case LEGACYZINK_RENDERER: return new MesaRenderSpec.LegacyZinkRenderSpec();
-            case MOBILEGLUES_RENDERER: return new MobileGluesRenderSpec();
+            case MOBILEGLUES_RENDERER: return new GLESRenderSpec.MgRenderSpec();
             case SFPEW_RENDERER: return new GLESRenderSpec.SFPEWRenderSpec();
             default:
+                if (renderer != null && renderer.startsWith(PluginManager.RENDERER_TAG_PREFIX)) {
+                    return new PluginRenderSpec(renderer.substring(PluginManager.RENDERER_TAG_PREFIX.length()));
+                }
                 Log.e(TAG, "Unknown renderer " + renderer);
                 return null;
         }
@@ -168,5 +172,15 @@ public class GameRenderer {
         if(LauncherPreferences.PREF_FREEDRENO_SYSMEM) environment.put("TU_DEBUG", "sysmem");
         if(LauncherPreferences.PREF_UBWC_WORKAROUND) environment.put("FD_DEV_FEATURES", "enable_tp_ubwc_flag_hint=1");
         MojoExec.setUseTurnip(true);
+    }
+
+    /**
+     * Enable custom Vulkan driver (PanVK Kbase) usage.
+     *
+     * PanVK Kbase is experimental on many Mali GPUs and refuses to load unless it is explicitly allowed.
+     */
+    public void overridePanvkDriver() {
+        environment.put("PAN_I_WANT_A_BROKEN_VULKAN_DRIVER", "1");
+        MojoExec.setUsePanvk(true);
     }
 }

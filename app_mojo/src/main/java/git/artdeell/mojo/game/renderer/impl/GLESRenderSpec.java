@@ -17,7 +17,6 @@ import git.artdeell.mojo.utils.JREUtils;
 import git.artdeell.mojo.utils.jre.GameRunner;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Map;
 
 import git.artdeell.mojo.R;
@@ -88,49 +87,73 @@ public abstract class GLESRenderSpec implements RenderSpec {
         }
     }
 
-    /**
-     * SFPEW (Simple FPE Wrapper). Emulates the fixed function pipeline on top of the GLES backend
-     * selected through SFPEW_EGL. Like upstream PojavLauncher, the backend is MobileGlues.
-     */
-    public static class SFPEWRenderSpec extends GLESRenderSpec {
-        /** Backend library SFPEW wraps */
-        public static final String BACKEND_LIBRARY = "libmobileglues.so";
+     public static class MgRenderSpec extends GLESRenderSpec {
+       public boolean compatibleDevice(Context context) {
+         return JREUtils.getDetectedVersion() >= 3 && new File(Tools.NATIVE_LIB_DIR, this.library()).exists(); 
+      }
+       public String name() {
+         return "MG-ES";
+       }
 
-        public boolean compatibleDevice(Context context) {
-            return JREUtils.getDetectedVersion() >= 3
-                    && new File(Tools.NATIVE_LIB_DIR, this.library()).exists()
-                    && new File(Tools.NATIVE_LIB_DIR, BACKEND_LIBRARY).exists();
-        }
-        public String name() {
-            return "SFPEW";
-        }
-        public int displayName() {
-            return R.string.mcl_setting_renderer_sfpew;
-        }
-        public void setupEnvironment(Context context, Map<String, String> envMap) {
-            // Same MG-ES config as the standalone MobileGlues renderer, since MG is the backend here
-            try {
-                LauncherPreferences.writeMGRendererSettings();
-            } catch (IOException e) {
-                Log.e("SFPEWRenderSpec", "Failed to write MG-ES renderer settings", e);
-            }
-            envMap.put("MG_DIR_PATH", Tools.DIR_DATA + "/MobileGlues");
+       public int displayName() {
+         return R.string.mcl_setting_renderer_mobileglues;
+       }
 
-            Instance instance = Instances.loadSelectedInstance();
-            boolean hasAngelica = instance != null && GameRunner.hasAngelica(instance.getGameDirectory());
-            // If Angelica is present, don't set SFPEW_EGL (Angelica provides its own FPE)
-            if (!hasAngelica) {
-                envMap.put("SFPEW_EGL", BACKEND_LIBRARY);
-            }
-        }
-        public String tag() {
-            return Renderers.SFPEW_RENDERER;
-        }
-        public String library() {
-            return "libSimpleFPEWrapper.so";
-        }
-        protected int glesVersion() {
-            return 3;
-        }
-    }
+       public void setupEnvironment(Context context, Map<String, String> envMap) {
+          envMap.put("MG_DIR_PATH", Tools.DIR_DATA + "/MobileGlues");
+       }
+
+       public String tag() {
+         return Renderers.MOBILEGLUES_RENDERER;
+       }
+
+       public String library() {
+         return "libmobileglues.so";
+       }
+
+       protected int glesVersion() {
+        return 3;
+       }
+
+     }
+
+     public static class SFPEWRenderSpec extends GLESRenderSpec {
+       public boolean compatibleDevice(Context context) {
+         return new File(Tools.NATIVE_LIB_DIR, this.library()).exists();
+       }
+
+       public String name() {
+         return "SFPEW";
+       }
+
+       public int displayName() {
+         return R.string.mcl_setting_renderer_sfpew;
+       }
+
+       public void setupEnvironment(Context context, Map<String, String> envMap) {
+         // Check if Angelica mod is present
+         Instance instance = Instances.loadSelectedInstance();
+         File gamedir = instance.getGameDirectory();
+         boolean hasAngelica = GameRunner.hasAngelica(gamedir);
+
+         if (!hasAngelica) {
+           // SFPEW wraps MobileGlues for better stability but why not LTW? Idk
+           envMap.put("SFPEW_EGL", "libmobileglues.so");
+           envMap.put("MG_DIR_PATH", Tools.DIR_DATA + "/MobileGlues");
+         }
+         // If Angelica is present, don't set SFPEW_EGL (Angelica provides its own FPE)
+       }
+
+       public String tag() {
+         return Renderers.SFPEW_RENDERER;
+       }
+
+       public String library() {
+         return "libSimpleFPEWrapper.so";
+       }
+
+       protected int glesVersion() {
+         return 3;
+       }
+     }
 }
