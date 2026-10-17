@@ -86,5 +86,11 @@
             android:key="vulkanDriver"
             android:title="@string/preference_vulkan_driver_title"
             app2:useSimpleSummaryProvider="true"/>
+
+        <androidx.preference.Preference
+            android:key="panvkDriverManager"
+            android:title="@string/preference_panvk_driver_manager_title"
+            android:summary="@string/preference_panvk_driver_manager_summary"
+            android:icon="@drawable/ic_px_volcano"/>
     </PreferenceCategory>
 </PreferenceScreen>

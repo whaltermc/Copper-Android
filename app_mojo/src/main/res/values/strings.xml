@@ -361,6 +361,19 @@
     <string name="preference_vulkan_driver_system">System Vulkan driver</string>
     <string name="preference_vulkan_driver_custom_adreno">Turnip (Adreno)</string>
     <string name="preference_vulkan_driver_custom_mali">PanVK Kbase (Mali)</string>
+    <string name="preference_panvk_driver_manager_title">PanVK driver manager</string>
+    <string name="preference_panvk_driver_manager_summary">Download the PanVK Kbase driver matching your Mali GPU architecture (v9-v13)</string>
+    <string name="panvk_driver_manager_gpu">GPU: %1$s</string>
+    <string name="panvk_driver_manager_arch">Detected architecture: %1$s</string>
+    <string name="panvk_driver_manager_status_downloaded">Driver: downloaded</string>
+    <string name="panvk_driver_manager_status_bundled">Driver: bundled (will update on next launch once downloaded)</string>
+    <string name="panvk_driver_manager_status_unsupported">This GPU is not supported by PanVK Kbase</string>
+    <string name="panvk_driver_manager_download">Download driver</string>
+    <string name="panvk_driver_manager_downloading">Downloading PanVK driver…</string>
+    <string name="panvk_driver_manager_downloaded">PanVK driver downloaded</string>
+    <string name="panvk_driver_manager_download_failed">Download failed: %1$s</string>
+    <string name="panvk_driver_manager_update">Update driver</string>
+    <string name="panvk_driver_manager_close">Close</string>
 
     <string name="preference_native_plugins_title">Native library plugins</string>
     <string name="preference_native_plugins_summary">Choose which installed native library plugins are loaded when the game starts.</string>
