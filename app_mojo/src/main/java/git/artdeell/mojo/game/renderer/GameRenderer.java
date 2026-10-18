@@ -193,6 +193,18 @@ public class GameRenderer {
      */
     public void overridePanvkDriver(Context context) {
         environment.put("PAN_I_WANT_A_BROKEN_VULKAN_DRIVER", "1");
+        selectPanvkDriver(context);
+        MojoExec.setUsePanvk(true);
+    }
+
+    /**
+     * Point the native library search path at the installed PanVK driver matching
+     * the device's Mali architecture, if one is present.
+     *
+     * @param context application context
+     * @return whether an installed driver was found
+     */
+    public static boolean selectPanvkDriver(Context context) {
         try {
             PanVkDriverManager manager = new PanVkDriverManager(context);
             int arch = manager.detectMaliArchVersion();
@@ -201,6 +213,7 @@ public class GameRenderer {
                 if(archDriver.exists()) {
                     sPanvkDriverDir = manager.getArchDriverDir(arch).getAbsolutePath();
                     Log.i(TAG, "PanVK driver for Mali v" + arch + ": " + archDriver.getAbsolutePath());
+                    return true;
                 }else {
                     Log.i(TAG, "No PanVK driver downloaded for Mali v" + arch + ", using system Vulkan");
                 }
@@ -208,6 +221,6 @@ public class GameRenderer {
         }catch (Throwable t) {
             Log.w(TAG, "PanVK driver selection failed, using system Vulkan", t);
         }
-        MojoExec.setUsePanvk(true);
+        return false;
     }
 }

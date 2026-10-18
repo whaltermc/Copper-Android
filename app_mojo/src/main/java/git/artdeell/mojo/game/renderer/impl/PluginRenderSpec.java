@@ -4,7 +4,9 @@ import android.content.Context;
 import android.util.Log;
 
 import git.artdeell.mojo.R;
+import git.artdeell.mojo.game.renderer.GameRenderer;
 import git.artdeell.mojo.game.renderer.RenderSpec;
+import git.artdeell.mojo.prefs.LauncherPreferences;
 import git.artdeell.mojo.utils.plugins.PluginManager;
 import git.artdeell.mojo.utils.plugins.RendererPlugin;
 
@@ -19,6 +21,7 @@ import git.artdeell.mojoexec.MojoExec;
 public class PluginRenderSpec implements RenderSpec {
     private final String packageName;
     private RendererPlugin plugin;
+    private boolean forcePanvk;
 
     public PluginRenderSpec(String packageName) {
         this.packageName = packageName;
@@ -63,12 +66,20 @@ public class PluginRenderSpec implements RenderSpec {
         RendererPlugin resolved = resolve(context);
         if (resolved == null) return;
         envMap.putAll(resolved.env);
+        forcePanvk = LauncherPreferences.PREF_VULKAN_DRIVER_CUSTOM.equals(LauncherPreferences.PREF_VULKAN_DRIVER)
+                && resolved.isZink()
+                && GameRenderer.selectPanvkDriver(context);
+        if (forcePanvk) {
+            envMap.put("PAN_I_WANT_A_BROKEN_VULKAN_DRIVER", "1");
+            MojoExec.setUsePanvk(true);
+        }
         if (!envMap.containsKey("LIBGL_EGL")) envMap.put("LIBGL_EGL", resolved.resolveEglPath());
         if (!envMap.containsKey("LIBGL_GLES")) envMap.put("LIBGL_GLES", resolved.resolveGlPath());
     }
 
     public boolean setupRenderer() {
         if (plugin == null) return false;
+        if (forcePanvk) MojoExec.preloadVulkan();
         for (String library : plugin.dlopen) {
             try {
                 System.load(new File(plugin.nativeLibraryDir, library).getAbsolutePath());

@@ -8,6 +8,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import git.artdeell.mojo.R;
@@ -83,6 +84,13 @@ public class RendererPlugin {
         }
         return new RendererPlugin(info.packageName, info.nativeLibraryDir, displayName,
                 rendererId, glLibrary, eglLibrary, env, dlopen);
+    }
+
+    /** Whether this plugin renders through Zink, and therefore consumes a Vulkan driver. */
+    public boolean isZink() {
+        if (rendererId != null && rendererId.toLowerCase(Locale.ROOT).contains("zink")) return true;
+        String driverOverride = env.get("MESA_LOADER_DRIVER_OVERRIDE");
+        return driverOverride != null && driverOverride.toLowerCase(Locale.ROOT).contains("zink");
     }
 
     /** Absolute path of the renderer EGL library, as requested by the plugin manifest. */
