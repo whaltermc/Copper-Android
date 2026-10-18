@@ -46,6 +46,13 @@ public class TinyFileDialogs {
     private static final Map<String, String> globalChars = new HashMap<>();
     private static final Map<String, Integer> globalInts = new HashMap<>();
 
+    static {
+        // The game checks tinyfd_version to confirm the tinyfd native loaded. This class
+        // replaces that native on Android, so it reports the version of the library it
+        // stands in for instead of leaving the lookup empty.
+        globalChars.put(tinyfd_version, "3.19.3");
+    }
+
     protected TinyFileDialogs() {
         throw new UnsupportedOperationException();
     }
