@@ -23,6 +23,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.kdt.mcgui.mcVersionSpinner;
@@ -184,6 +185,38 @@ public class MainMenuFragment extends Fragment {
         // Visibility is updated by mBackStackListener once the transaction lands
     }
 
+    /** Name of the back stack entry created by {@link #openBrowseFromManage} */
+    private static final String BACK_BROWSE_FROM_MANAGE = "browse_from_manage";
+
+    /**
+     * Back button of a browse picker that was opened from Manage Content: goes back to the manage
+     * screen, however many content types were browsed in between, instead of all the way home.
+     */
+    public void leaveBrowseFromManage() {
+        getChildFragmentManager().popBackStack(BACK_BROWSE_FROM_MANAGE, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+    }
+
+    /**
+     * Landscape: Manage Content's add / browse button. The left pane switches from the manage
+     * picker to the browse picker (with the filter cards) and the right pane to the store, in one
+     * back stack entry, so Back returns to the manage screen it came from.
+     * @return false when this isn't the two-pane layout, the caller then navigates on its own
+     */
+    public boolean openBrowseFromManage(@NonNull Bundle searchArgs, @NonNull String tag) {
+        if (!isTwoPane()) return false;
+        Bundle pickerArgs = new Bundle();
+        pickerArgs.putBoolean(ContentPickerFragment.ARG_MANAGE, false);
+        pickerArgs.putBoolean(ContentPickerFragment.ARG_FROM_MANAGE, true);
+        getChildFragmentManager()
+                .beginTransaction()
+                .setReorderingAllowed(true)
+                .replace(R.id.left_pane_container, ContentPickerFragment.class, pickerArgs, ContentPickerFragment.TAG)
+                .replace(R.id.right_pane_container, ModsSearchFragment.class, searchArgs, tag)
+                .addToBackStack(BACK_BROWSE_FROM_MANAGE)
+                .commit();
+        return true;
+    }
+
     /**
      * Called by {@link ContentPickerFragment} when one of its mods / resource packs / shader packs
      * buttons is tapped. The picker itself stays in the left pane.
@@ -192,13 +225,41 @@ public class MainMenuFragment extends Fragment {
         onContentTypeChosen(manage, contentType);
     }
 
-    /** Shows the sidebar or the content picker in the left pane, depending on which is active */
+    /**
+     * Landscape: opens the content that was just put into the ContentSession. The description
+     * side (logo, back button and the Description / Gallery / Changelog / Versions buttons) takes
+     * the left pane and the section picked with those buttons takes the right pane, Versions first.
+     * Whatever was showing in the two panes is hidden, not replaced, so Back brings the search results back exactly as they were, scroll position
+     * and query included. Both panes are in a single back stack entry.
+     */
+    public void openContentDetail() {
+        if (!isTwoPane()) return;
+        if (isTagAlreadyOnTop(ContentDetailFragment.TAG)) return;
+
+        FragmentManager manager = getChildFragmentManager();
+        FragmentTransaction transaction = manager.beginTransaction().setReorderingAllowed(true);
+        Fragment left = manager.findFragmentById(R.id.left_pane_container);
+        Fragment right = manager.findFragmentById(R.id.right_pane_container);
+        if (left != null) transaction.hide(left);
+        if (right != null) transaction.hide(right);
+        transaction
+                .add(R.id.left_pane_container, ContentDetailFragment.class,
+                        ContentDetailFragment.args(ContentDetailFragment.MODE_LEFT), ContentDetailFragment.TAG)
+                .add(R.id.right_pane_container, ContentDetailFragment.class,
+                        ContentDetailFragment.args(ContentDetailFragment.MODE_RIGHT), ContentDetailFragment.TAG_RIGHT)
+                .addToBackStack(ContentDetailFragment.TAG)
+                .commit();
+        // Visibility is updated by mBackStackListener once the transaction lands
+    }
+
+    /** Shows the sidebar or the content picker / content detail in the left pane, depending on which is active */
     private void updateLeftPaneVisibility() {
         if (!isTwoPane() || mLeftSidebar == null || mLeftPaneContainer == null) return;
         Fragment leftFragment = getChildFragmentManager().findFragmentById(R.id.left_pane_container);
-        boolean pickerActive = leftFragment instanceof ContentPickerFragment;
-        mLeftSidebar.setVisibility(pickerActive ? View.GONE : View.VISIBLE);
-        mLeftPaneContainer.setVisibility(pickerActive ? View.VISIBLE : View.GONE);
+        boolean paneActive = leftFragment instanceof ContentPickerFragment
+                || leftFragment instanceof ContentDetailFragment;
+        mLeftSidebar.setVisibility(paneActive ? View.GONE : View.VISIBLE);
+        mLeftPaneContainer.setVisibility(paneActive ? View.VISIBLE : View.GONE);
     }
 
     private void showContentPickerDialog(boolean manage) {

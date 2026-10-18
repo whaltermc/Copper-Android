@@ -30,7 +30,10 @@ import git.artdeell.mojo.utils.MCOptionUtils;
 import git.artdeell.mojo.utils.OldVersionsUtils;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,6 +44,7 @@ import java.util.Map;
 import git.artdeell.mojo.R;
 
 public class GameRunner {
+    private static final String FILEDIALOG_BRIDGE_ASSET = "components/filedialog_bridge/filedialog_bridge.jar";
     /**
      * Optimization mods based on Sodium can mitigate the render distance issue. Check if Sodium
      * or its derivative is currently installed to skip the render distance check.
@@ -205,7 +209,7 @@ public class GameRunner {
 
             // Switch renderer to LTW when running 1.21.5
             if(!isGl4esCompatible(versionInfo) && isGl4es) {
-                switchRendererIfSupported(ltwSupported, ltw, gameRenderer, instance, activity, R.string.compat_sodium_not_supported);
+                switchRendererIfSupported(ltwSupported, ltw, gameRenderer, instance, activity, R.string.compat_version_not_supported);
             }
         }
 
@@ -240,7 +244,8 @@ public class GameRunner {
         // Select the appropriate openGL version
         OldVersionsUtils.selectOpenGlVersion(versionInfo);
 
-        ArrayList<String> launchClassPath = new ArrayList<>(classpath.length);
+        ArrayList<String> launchClassPath = new ArrayList<>(classpath.length + 1);
+        classpath = prependFileDialogBridge(activity, classpath);
         for(int i = 0; i < classpath.length; i++) {
             File classpathEntry = classpath[i];
             String entryPath = classpathEntry.getAbsolutePath();
@@ -279,6 +284,7 @@ public class GameRunner {
         javaArgList.add("-Dorg.lwjgl.system.SharedLibraryExtractPath="+lwjglExtractDir.getAbsolutePath());
 
         addAuthlibInjectorArgs(javaArgList, account);
+        addNoBlocklistArgs(javaArgList);
 
         mergeMoJsonArgs(javaArgList, getMoJsonJvmArgs(versionId));
 
@@ -325,6 +331,33 @@ public class GameRunner {
         Tools.fullyExit();
     }
 
+    /**
+     * Unpack the file dialog bridge jar and put it ahead of the game classpath, so
+     * games link against the launcher dialog implementations (tinyfd, NFD) instead
+     * of the bundled native glue libraries (which have no Android file picker).
+     */
+    private static File[] prependFileDialogBridge(AppCompatActivity activity, File[] classpath) {
+        try {
+            File bridgeDir = new File(Tools.DIR_CACHE, "filedialog_bridge");
+            if (!bridgeDir.isDirectory() && !bridgeDir.mkdirs()) return classpath;
+            File bridgeJar = new File(bridgeDir, "filedialog_bridge.jar");
+            try (InputStream in = activity.getAssets().open(FILEDIALOG_BRIDGE_ASSET);
+                 OutputStream out = new FileOutputStream(bridgeJar)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+            }
+            File[] newClasspath = new File[classpath.length + 1];
+            newClasspath[0] = bridgeJar;
+            System.arraycopy(classpath, 0, newClasspath, 1, classpath.length);
+            Log.i("GameRunner", "File dialog bridge prepended to the game classpath");
+            return newClasspath;
+        } catch (Throwable t) {
+            Log.w("GameRunner", "File dialog bridge unavailable, file dialogs will stay inactive", t);
+            return classpath;
+        }
+    }
+
     private static void disableSplash(File dir) {
         File configDir = new File(dir, "config");
         if(FileUtils.ensureDirectorySilently(configDir)) {
@@ -350,6 +383,11 @@ public class GameRunner {
         String injectorUrl = account.authType.injectorUrl;
         if(injectorUrl == null) return;
         javaArgList.add("-javaagent:"+Tools.DIR_DATA+"/authlib-injector/authlib-injector.jar="+injectorUrl);
+    }
+
+    private static void addNoBlocklistArgs(List<String> javaArgList) {
+        if(!LauncherPreferences.PREF_DISABLE_BLOCKLIST) return;
+        javaArgList.add("-javaagent:"+Tools.DIR_DATA+"/noblocklist/NoBlocklist-1.0-SNAPSHOT-all.jar");
     }
 
     // Skip setting essential flags from the version JSON as we already override them
