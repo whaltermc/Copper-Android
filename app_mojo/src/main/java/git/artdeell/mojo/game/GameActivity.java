@@ -127,7 +127,7 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
             finish();
             return;
         }
-        mGameRenderer = new GameRenderer(instance.getLaunchRenderer());
+        mGameRenderer = new GameRenderer(this, instance.getLaunchRenderer());
 
         if(!PREF_ZINK_PREFER_SYSTEM_DRIVER) {
             mGameRenderer.overrideVulkanDriver();
@@ -398,8 +398,6 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-
-        if(FileDialogBridge.handleActivityResult(requestCode, resultCode, data)) return;
 
         if (requestCode == 1 && resultCode == Activity.RESULT_OK) {
             // Reload PREF_DEFAULTCTRL_PATH

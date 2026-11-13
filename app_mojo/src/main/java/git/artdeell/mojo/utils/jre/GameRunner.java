@@ -43,8 +43,13 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 import git.artdeell.mojo.R;
 
@@ -118,6 +123,26 @@ public class GameRunner {
         // 7 is the render distance "magic number" above which MC creates too many buffers
         // for Adreno's OpenGL ES implementation
         return renderDistance > 7;
+    }
+
+    /**
+     * Persist the per-instance graphics backend choice into options.txt.
+     * MC 26.2+ reads preferredGraphicsBackend (default/opengl/vulkan) from there;
+     * older versions ignore the key, but we still skip writing for them.
+     */
+    private static void applyGraphicsBackend(Instance instance, String versionId) {
+        String backend = instance.getLaunchBackend();
+        if(backend == null || "default".equals(backend)) return;
+        if(!Tools.isMcVersionAtLeast(versionId, 26, 2)) return;
+        try {
+            MCOptionUtils.load(instance.getGameDirectory().getAbsolutePath());
+            if(!backend.equals(MCOptionUtils.get("preferredGraphicsBackend"))) {
+                MCOptionUtils.set("preferredGraphicsBackend", backend);
+                MCOptionUtils.save();
+            }
+        }catch (Exception e) {
+            Log.w("GameRunner", "Failed to apply graphics backend", e);
+        }
     }
 
     private static boolean isGl4esCompatible(JVersionList.Version version) throws Exception{
@@ -235,6 +260,8 @@ public class GameRunner {
 
         GameOptionsUtils.fixOptions(isLtw);
 
+        applyGraphicsBackend(instance, versionId);
+
         if(isLtw && GpuUtils.getGlInfo().forcedMsaa) {
             if(showDialog(activity, R.string.ltw_4x_msaa_warning_msg)) return;
         }
@@ -252,7 +279,7 @@ public class GameRunner {
         OldVersionsUtils.selectOpenGlVersion(versionInfo);
 
         ArrayList<String> launchClassPath = new ArrayList<>(classpath.length + 1);
-        classpath = prependFileDialogBridge(activity, classpath);
+        classpath = patchFileDialogJars(activity, classpath);
         for(int i = 0; i < classpath.length; i++) {
             File classpathEntry = classpath[i];
             String entryPath = classpathEntry.getAbsolutePath();
@@ -278,13 +305,31 @@ public class GameRunner {
         versionInfo.logging = null;
 
         File versionSpecificNativesDir = new File(Tools.DIR_CACHE, "natives/"+versionId);
+        String libraryPath = Tools.NATIVE_LIB_DIR;
         if(versionSpecificNativesDir.exists()) {
             String dirPath = versionSpecificNativesDir.getAbsolutePath();
-            javaArgList.add("-Djava.library.path="+dirPath+":"+Tools.NATIVE_LIB_DIR);
+            libraryPath = dirPath+":"+libraryPath;
             javaArgList.add("-Djna.boot.library.path="+dirPath);
             // Sometimes, the game can extract natives itself onto this path
             javaArgList.add("-Dorg.lwjgl.librarypath="+dirPath);
         }
+        // On Java 8, System.loadLibrary("lwjgl_tinyfd") refuses to call the
+        // NativeLibraries.load hook unless a file named liblwjgl_tinyfd.so is
+        // actually present on java.library.path. Ship an empty placeholder there
+        // so the existence check passes; our hook then redirects the real load
+        // to libmojort.so, which provides the tinyfd JNI entry points.
+        File tinyfdPlaceholder = new File(Tools.DIR_CACHE, "natives/liblwjgl_tinyfd.so");
+        if (!tinyfdPlaceholder.exists()) {
+            FileUtils.ensureDirectory(tinyfdPlaceholder.getParentFile());
+            try {
+                new FileOutputStream(tinyfdPlaceholder).close();
+            } catch (IOException ignored) {}
+        }
+        libraryPath = tinyfdPlaceholder.getParent()+":"+libraryPath;
+
+        // Launcher libraries (libmojort) live in the app native dir and must stay
+        // reachable even when a version has no extracted natives directory.
+        javaArgList.add("-Djava.library.path="+libraryPath);
 
         File lwjglExtractDir = new File(Tools.DIR_CACHE, "lwjgl_native/"+versionId);
         FileUtils.ensureDirectory(lwjglExtractDir);
@@ -339,11 +384,14 @@ public class GameRunner {
     }
 
     /**
-     * Unpack the file dialog bridge jar and put it ahead of the game classpath, so
-     * games link against the launcher dialog implementations (tinyfd, NFD) instead
-     * of the bundled native glue libraries (which have no Android file picker).
+     * Rewrites the lwjgl-tinyfd and lwjgl-nfd jars on the game classpath so their
+     * dialog binding classes come from the launcher bridge instead of the bundled
+     * native glue libraries (which have no Android file picker). The lwjgl jars
+     * stay on the classpath as themselves: MC 26.2+ extracts their native
+     * libraries through its own bootstrap, and Forge resolves each package from
+     * exactly one module, so a separate bridge jar would fail as a split package.
      */
-    private static File[] prependFileDialogBridge(AppCompatActivity activity, File[] classpath) {
+    private static File[] patchFileDialogJars(AppCompatActivity activity, File[] classpath) {
         try {
             File bridgeDir = new File(Tools.DIR_CACHE, "filedialog_bridge");
             if (!bridgeDir.isDirectory() && !bridgeDir.mkdirs()) return classpath;
@@ -354,15 +402,115 @@ public class GameRunner {
                 int read;
                 while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
             }
-            File[] newClasspath = new File[classpath.length + 1];
-            newClasspath[0] = bridgeJar;
-            System.arraycopy(classpath, 0, newClasspath, 1, classpath.length);
-            Log.i("GameRunner", "File dialog bridge prepended to the game classpath");
-            return newClasspath;
+            Map<String, byte[]> bridgeClasses = readBridgeClasses(bridgeJar);
+            File[] result = new File[classpath.length];
+            boolean patched = false;
+            for (int i = 0; i < classpath.length; i++) {
+                File entry = classpath[i];
+                String name = entry.getName().toLowerCase();
+                if (name.contains("tinyfd")) {
+                    // tinyfd is served by the vendored native implementation; the
+                    // original lwjgl-tinyfd classes stay untouched.
+                    result[i] = entry;
+                } else if (name.contains("-nfd")) {
+                    result[i] = patchDialogJar(bridgeDir, entry, bridgeClasses, "org/lwjgl/util/nfd/", DIALOG_BRIDGE_NFD_CLASSES);
+                    patched |= result[i] != entry;
+                } else {
+                    result[i] = entry;
+                }
+            }
+            if (patched) {
+                Log.i("GameRunner", "File dialog bridge injected into the lwjgl dialog jars");
+            }
+            return result;
         } catch (Throwable t) {
             Log.w("GameRunner", "File dialog bridge unavailable, file dialogs will stay inactive", t);
             return classpath;
         }
+    }
+
+    /** Bridge classes replacing the NFD binding: the dialog class and its path set. */
+    private static final String[] DIALOG_BRIDGE_NFD_CLASSES = {
+            "org/lwjgl/util/nfd/NativeFileDialog",
+            "org/lwjgl/util/nfd/NFDPathSet",
+    };
+
+    private static Map<String, byte[]> readBridgeClasses(File bridgeJar) throws IOException {
+        Map<String, byte[]> classes = new HashMap<>();
+        try (ZipFile zip = new ZipFile(bridgeJar)) {
+            Enumeration<? extends ZipEntry> entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                if (entry.isDirectory() || !entry.getName().endsWith(".class")) continue;
+                classes.put(entry.getName(), readZipEntry(zip, entry));
+            }
+        }
+        return classes;
+    }
+
+    /**
+     * Write a patched copy of the jar: every original class is kept, but the
+     * binding classes of one dialog package are shadowed by the bridge
+     * implementations (written first so they resolve first). Nothing is
+     * removed from the jar, so mods and the game keep referencing classes
+     * like org.lwjgl.util.nfd.NFDFilterItem that the bridge does not touch.
+     */
+    private static File patchDialogJar(File bridgeDir, File source, Map<String, byte[]> bridgeClasses,
+                                       String packageName, String[] replaceClassPrefixes) {
+        Map<String, byte[]> replacements = new HashMap<>();
+        for (Map.Entry<String, byte[]> bridgeClass : bridgeClasses.entrySet()) {
+            String name = bridgeClass.getKey();
+            if (!name.startsWith(packageName)) continue;
+            String base = name.substring(packageName.length(), name.length() - ".class".length());
+            if (replaceClassPrefixes == null || matchesReplacePrefix(base, replaceClassPrefixes)) {
+                replacements.put(name, bridgeClass.getValue());
+            }
+        }
+        if (replacements.isEmpty()) return source;
+        File output = new File(bridgeDir, source.getName());
+        try (ZipFile zip = new ZipFile(source);
+             ZipOutputStream zout = new ZipOutputStream(new FileOutputStream(output))) {
+            // Shadowing classes first: classloaders pick the first entry by name.
+            for (Map.Entry<String, byte[]> replacement : replacements.entrySet()) {
+                zout.putNextEntry(new ZipEntry(replacement.getKey()));
+                zout.write(replacement.getValue());
+                zout.closeEntry();
+            }
+            Enumeration<? extends ZipEntry> entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                if (replacements.containsKey(entry.getName())) continue;
+                zout.putNextEntry(new ZipEntry(entry.getName()));
+                if (!entry.isDirectory()) {
+                    zout.write(readZipEntry(zip, entry));
+                }
+                zout.closeEntry();
+            }
+        } catch (IOException e) {
+            Log.w("GameRunner", "Failed to patch the dialog jar " + source.getName(), e);
+            return source;
+        }
+        return output;
+    }
+
+    private static boolean matchesReplacePrefix(String className, String[] prefixes) {
+        for (String prefix : prefixes) {
+            if (className.equals(prefix) || className.startsWith(prefix + "$")) return true;
+        }
+        return false;
+    }
+
+    private static byte[] readZipEntry(ZipFile zip, ZipEntry entry) throws IOException {
+        byte[] buffer = new byte[(int) entry.getSize()];
+        try (InputStream in = zip.getInputStream(entry)) {
+            int offset = 0;
+            while (offset < buffer.length) {
+                int read = in.read(buffer, offset, buffer.length - offset);
+                if (read < 0) throw new IOException("Truncated zip entry " + entry.getName());
+                offset += read;
+            }
+        }
+        return buffer;
     }
 
     private static void disableSplash(File dir) {
