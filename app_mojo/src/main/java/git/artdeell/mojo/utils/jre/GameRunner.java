@@ -133,7 +133,7 @@ public class GameRunner {
     private static void applyGraphicsBackend(Instance instance, String versionId) {
         String backend = instance.getLaunchBackend();
         if(backend == null || "default".equals(backend)) return;
-        if(!Tools.isMcVersionAtLeast(versionId, 26, 2)) return;
+        if(!Tools.isMcVersionAtLeast(versionId, 1, 21)) return;
         try {
             MCOptionUtils.load(instance.getGameDirectory().getAbsolutePath());
             if(!backend.equals(MCOptionUtils.get("preferredGraphicsBackend"))) {

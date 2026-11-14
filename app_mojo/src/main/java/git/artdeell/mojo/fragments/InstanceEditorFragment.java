@@ -246,7 +246,7 @@ public class InstanceEditorFragment extends Fragment implements CropperUtils.Cro
      */
     private void updateBackendVisibility(Context context) {
         String versionId = mDefaultVersion.getText().toString();
-        int visibility = Tools.isMcVersionAtLeast(versionId, 26, 2) ? View.VISIBLE : View.GONE;
+        int visibility = Tools.isMcVersionAtLeast(versionId, 1, 21) ? View.VISIBLE : View.GONE;
         mDefaultBackend.setVisibility(visibility);
         View backendLabel = getView().findViewById(R.id.textView8);
         if(backendLabel != null) backendLabel.setVisibility(visibility);
