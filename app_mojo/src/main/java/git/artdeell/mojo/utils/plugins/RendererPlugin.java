@@ -95,7 +95,7 @@ public class RendererPlugin {
         return resolveLibrary(glLibrary);
     }
 
-    private String resolveLibrary(String library) {
+    public String resolveLibrary(String library) {
         if (library == null) return null;
         if (library.startsWith("/")) return library;
         return new File(nativeLibraryDir, library).getAbsolutePath();

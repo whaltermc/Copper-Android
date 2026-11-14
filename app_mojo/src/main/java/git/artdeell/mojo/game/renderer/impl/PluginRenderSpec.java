@@ -8,6 +8,7 @@ import git.artdeell.mojo.game.renderer.RenderSpec;
 import git.artdeell.mojo.utils.plugins.PluginManager;
 import git.artdeell.mojo.utils.plugins.RendererPlugin;
 
+import java.io.File;
 import java.util.Map;
 
 import git.artdeell.mojoexec.MojoExec;
