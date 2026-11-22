@@ -1,17 +1,21 @@
 package git.artdeell.mojo.game.platform.dialog;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.media.ToneGenerator;
 import android.text.InputType;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.annotation.Keep;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.textfield.TextInputLayout;
 
 import git.artdeell.mojo.R;
 import git.artdeell.mojo.Tools;
@@ -286,7 +290,7 @@ public class FileDialogBridge {
     private static void showMessageBox(Activity host, String title, String message,
                                        String dialogType, String iconType, int defaultButton,
                                        int[] result, CountDownLatch latch) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(host);
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(host);
         if (title != null) builder.setTitle(title);
         if (message != null) builder.setMessage(message);
         int icon = messageBoxIcon(iconType);
@@ -355,13 +359,11 @@ public class FileDialogBridge {
         if (iconType == null) return 0;
         switch (iconType.toLowerCase()) {
             case "warning":
-                return android.R.drawable.ic_dialog_alert;
             case "error":
-                return android.R.drawable.ic_dialog_alert;
+                return R.drawable.ic_px_memory_warning;
             case "question":
-                return android.R.drawable.ic_dialog_info;
             case "info":
-                return android.R.drawable.ic_dialog_info;
+                return R.drawable.ic_px_info;
             default:
                 return 0;
         }
@@ -370,18 +372,15 @@ public class FileDialogBridge {
     private static void showInputBox(Activity host, String title, String message,
                                      String defaultInput, boolean password,
                                      String[] result, CountDownLatch latch) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(host);
+        TextInputLayout inputLayout = BuiltinFileDialog.createInputLayout(host, null, defaultInput,
+                password ? InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
+                        : InputType.TYPE_CLASS_TEXT);
+        if (password) inputLayout.setEndIconMode(TextInputLayout.END_ICON_PASSWORD_TOGGLE);
+        EditText input = inputLayout.getEditText();
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(host);
         if (title != null) builder.setTitle(title);
         if (message != null) builder.setMessage(message);
-        EditText input = new EditText(host);
-        input.setInputType(password
-                ? InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
-                : InputType.TYPE_CLASS_TEXT);
-        if (defaultInput != null) {
-            input.setText(defaultInput);
-            input.setSelection(defaultInput.length());
-        }
-        builder.setView(input);
+        builder.setView(BuiltinFileDialog.wrapDialogContent(host, inputLayout));
         builder.setPositiveButton(android.R.string.ok, (d, w) -> {
             result[0] = input.getText().toString();
             latch.countDown();
